@@ -30,8 +30,8 @@ class CBANet(nn.Module):
         self.decoder = SharedMLP1d([1344, 256], args.norm)
         self.mask_decoder = SharedMLP1d([256, 256], args.norm)
 
-        self.homo_conv = EdgeConv([256 * 2, 256], self.k, args.norm)
-        self.sp_conv = EdgeConv([256 * 2, 256], self.k, args.norm)
+        self.pw_conv = EdgeConv([256 * 2, 256], self.k, args.norm)
+        self.cw_conv = EdgeConv([256 * 2, 256], self.k, args.norm)
 
         self.class_head = nn.Sequential(SharedMLP1d([256, 256], args.norm),
                                         nn.Dropout(args.dropout),
@@ -78,7 +78,7 @@ class CBANet(nn.Module):
         if eid > 19:
 
             feats = self.decoder(feats)  # (b, 256, 10000)
-            mask_feats = self.mask_decoder(feats)  # (b, 256 * 3, 10000)
+            mask_feats = self.mask_decoder(feats)  # (b, 256, 10000)
 
             dmap = dmap_out.detach()
             bmap = bmap_out.detach().argmax(1)  # (b, 1, 10000)
@@ -92,9 +92,8 @@ class CBANet(nn.Module):
                 ps = p[i].T[t_idx]  # (M, 3)
                 fs = feats[i].T[t_idx]  # (M, 256)
                 ps_idx = knn(ps.T.unsqueeze(0).contiguous(), self.k)  # 1, 20, M
-                fs = self.homo_conv(fs.T.unsqueeze(0).contiguous(), ps_idx)  # 1, 256, M
+                fs = self.pw_conv(fs.T.unsqueeze(0).contiguous(), ps_idx)  # 1, 256, M
 
-                # select_idx = furthest_point_sample(ps.unsqueeze(0).contiguous(), self.query_num).squeeze().to(torch.long)
                 select_idx = center_fps(dm[t_idx], ps, self.query_num)
                 select_ps = ps[select_idx].T.unsqueeze(0)  # 1, 3, 100
                 select_fs = fs[:, :, select_idx]  # 1, 256, 100
@@ -108,7 +107,7 @@ class CBANet(nn.Module):
             g_ps = torch.concat(g_ps, dim=0)  # b, 3, 100
 
             idx = knn(g_ps.contiguous(), self.k)
-            g_feats = self.sp_conv(g_fs, idx)  # b, 256, 100
+            g_feats = self.cw_conv(g_fs, idx)  # b, 256, 100
 
             mask_feats = torch.einsum('bdn,bdm->bnm', g_feats, mask_feats)  # b, 100, 10000
 
@@ -160,9 +159,8 @@ class CBANet(nn.Module):
             ps = p[i].T[t_idx]  # (M, 3)
             fs = feats[i].T[t_idx]  # (M, 256)
             ps_idx = knn(ps.T.unsqueeze(0).contiguous(), self.k)  # 1, 30, M
-            fs = self.homo_conv(fs.T.unsqueeze(0).contiguous(), ps_idx)  # 1, 256, M
+            fs = self.pw_conv(fs.T.unsqueeze(0).contiguous(), ps_idx)  # 1, 256, M
 
-            # select_idx = furthest_point_sample(ps.unsqueeze(0).contiguous(), self.query_num).squeeze().to(torch.long)
             select_idx = center_fps(dm[t_idx], ps, self.query_num)
             select_ps = ps[select_idx].T.unsqueeze(0)  # 1, 3, 100
             select_fs = fs[:, :, select_idx]  # 1, 256, 100
@@ -176,7 +174,7 @@ class CBANet(nn.Module):
         g_ps = torch.concat(g_ps, dim=0)  # b, 3, 100
 
         idx = knn(g_ps.contiguous(), self.k)
-        g_feats = self.sp_conv(g_fs, idx)  # b, 256, 100
+        g_feats = self.cw_conv(g_fs, idx)  # b, 256, 100
 
         mask_feats = torch.einsum('bdn,bdm->bnm', g_feats, mask_feats)  # b, 100, 10000
 
