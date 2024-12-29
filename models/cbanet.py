@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from .dgcnn_utils import STN, Backbone, SharedMLP1d, EdgeConv, knn
 from .fps_utils import center_fps
-# from pointnet2_ops.pointnet2_utils import furthest_point_sample
 
 
 class CBANet(nn.Module):
